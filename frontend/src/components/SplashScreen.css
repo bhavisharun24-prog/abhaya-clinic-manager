@@ -1,0 +1,40 @@
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--primary-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  animation: fadeIn 0.8s ease-out;
+  z-index: 9999;
+}
+
+.logo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  animation: scaleUp 1.2s ease-out;
+}
+
+.logo-text {
+  font-family: var(--font-header);
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.tagline {
+  color: #d9383a;
+  font-weight: 500;
+  font-size: 1rem;
+  margin-top: 0.5rem;
+  letter-spacing: 1px;
+}
+
+@keyframes scaleUp {
+  0% { transform: scale(0.6); opacity: 0; }
+  80% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
+}

@@ -3,6 +3,7 @@ import Header from './components/Header';
 import DoctorDashboard from './components/DoctorDashboard';
 import PharmacistDashboard from './components/PharmacistDashboard';
 import SplashScreen from './components/SplashScreen';
+import doctorLogo from '../../newlogo.jpeg';
 
 export const AppContext = createContext();
 
@@ -45,7 +46,7 @@ export default function App() {
     e.preventDefault();
     setLoginError('');
     try {
-      const host = window.location.hostname || 'localhost';
+      const host = window.location.hostname || '127.0.0.1';
       const res = await fetch(`http://${host}:5000/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,7 +76,7 @@ export default function App() {
 
     let ws;
     let reconnectTimer;
-    const hostname = window.location.hostname || 'localhost';
+    const hostname = window.location.hostname || '127.0.0.1';
     const wsUrl = `ws://${hostname}:5000/ws`;
 
     function connect() {
@@ -148,10 +149,7 @@ export default function App() {
           {/* Logo Signboard styling */}
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d9383a" strokeWidth="2.5">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                <path d="M12 5v14M5 12h14" stroke="#ffffff" strokeWidth="1.5" />
-              </svg>
+              <img src={doctorLogo} alt="Abhaya Medical Care logo" width="32" height="32" style={{ objectFit: 'contain', borderRadius: '8px' }} />
               <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'white', fontFamily: "'Outfit', sans-serif" }}>Abhaya</span>
             </div>
             <p style={{ color: '#d9383a', fontWeight: 'bold', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '2px' }}>Medical Care</p>

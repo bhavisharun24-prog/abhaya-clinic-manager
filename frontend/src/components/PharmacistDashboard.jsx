@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AppContext } from '../App';
+import doctorLogo from '../../../newlogo.jpeg';
 
 export default function PharmacistDashboard() {
   const { activeTab, setActiveTab, wsMessage, clearWsMessage, user } = useContext(AppContext);
-  const host = window.location.hostname || 'localhost';
+  const host = window.location.hostname || '127.0.0.1';
 
   // State definitions
   const [pendingQueue, setPendingQueue] = useState([]);
@@ -655,6 +656,9 @@ export default function PharmacistDashboard() {
 
                   {/* Payment selector and verification trigger */}
                   <div style={{ marginTop: '1.5rem' }}>
+                    <button onClick={() => window.print()} className="btn btn-secondary" style={{ width: '100%', marginBottom: '0.75rem' }}>
+                      🖨️ Print Prescription
+                    </button>
                     {selectedRx.status === 'sent' ? (
                       <button onClick={() => handleVerifyPrescription(selectedRx.id)} className="btn btn-primary" style={{ width: '100%' }}>
                         🔍 Verify Prescription (Check Stock)
@@ -697,6 +701,73 @@ export default function PharmacistDashboard() {
                   Select a patient prescription from the queue to process billing.
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'billing_queue' && selectedRx && (
+          <div className="prescription-print-sheet" style={{ display: 'none' }}>
+            <div style={{ border: '2px solid #0f3d91', borderRadius: '10px', overflow: 'hidden', fontFamily: 'Arial, sans-serif' }}>
+              <div style={{ background: 'linear-gradient(90deg, #0f3d91 0%, #1e5edb 100%)', color: 'white', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img src={doctorLogo} alt="Clinic logo" style={{ width: '44px', height: '44px', objectFit: 'contain', borderRadius: '8px', background: 'white', padding: '4px' }} />
+                  <div>
+                    <div style={{ fontSize: '18px', fontWeight: 700 }}>ABHAYA MEDICAL CARE</div>
+                    <div style={{ fontSize: '12px', opacity: 0.9 }}>Compassion... Care... Cure...</div>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '12px' }}>
+                  <div>Dr. Raveesha .A</div>
+                  <div>M.B.B.S, M.D, F.A.G.E, M.N.A.M.S.</div>
+                </div>
+              </div>
+
+              <div style={{ padding: '18px 20px', background: 'white', color: '#111827' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '13px' }}>
+                  <div><strong>Patient:</strong> {selectedRx.patient_name}</div>
+                  <div><strong>ID:</strong> {selectedRx.patient_id}</div>
+                </div>
+                <div style={{ marginBottom: '12px', fontSize: '13px' }}>
+                  <div><strong>Date:</strong> {new Date(selectedRx.created_at).toLocaleDateString()}</div>
+                </div>
+
+                <div style={{ borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '10px 0', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Medical Prescription</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Medicine</th>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Dosage</th>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Frequency</th>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedRx.medicines.map((m, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '8px', borderBottom: '1px solid #f3f4f6' }}>{m.name}</td>
+                          <td style={{ padding: '8px', borderBottom: '1px solid #f3f4f6' }}>{m.dosage || 'As directed'}</td>
+                          <td style={{ padding: '8px', borderBottom: '1px solid #f3f4f6' }}>{m.frequency || 'As directed'}</td>
+                          <td style={{ padding: '8px', borderBottom: '1px solid #f3f4f6' }}>{m.duration ? `${m.duration} days` : 'As directed'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ fontSize: '13px', marginTop: '12px' }}>
+                  <div><strong>Doctor Notes:</strong> {selectedRx.doctor_notes || 'No additional notes'}</div>
+                </div>
+
+                <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <div>____________________</div>
+                  <div>____________________</div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#4b5563', marginTop: '6px' }}>
+                  <div>Doctor Signature</div>
+                  <div>Patient / Guardian Signature</div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -789,6 +860,7 @@ export default function PharmacistDashboard() {
                 <p><strong>UPI Revenue:</strong> ₹{eodReport.upiTotal.toFixed(2)}</p>
               </div>
             </div>
+
           </div>
         )}
       </main>

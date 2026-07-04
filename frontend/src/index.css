@@ -627,19 +627,47 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Printing styles for Bills and EOD */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
   body {
     background-color: white !important;
     color: black !important;
+    margin: 0 !important;
   }
+
+  .app-container {
+    height: auto !important;
+  }
+
   .sidebar, .hospital-header, .btn, .search-container, .no-print {
     display: none !important;
   }
+
   .main-content {
     padding: 0 !important;
+    overflow: visible !important;
   }
-  .print-invoice {
+
+  .main-content > *:not(.prescription-print-sheet):not(.print-invoice) {
+    display: none !important;
+  }
+
+  .print-invoice, .prescription-print-sheet {
     display: block !important;
+    width: 100% !important;
+    max-width: none !important;
     border: none !important;
     box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .prescription-print-sheet > div {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
   }
 }

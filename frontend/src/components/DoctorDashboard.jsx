@@ -16,7 +16,7 @@ export default function DoctorDashboard() {
 
   // Prescription Workspace State
   const [prescriptionMeds, setPrescriptionMeds] = useState([]);
-  const [consultationFee, setConsultationFee] = useState(400);
+  const [consultationFee, setConsultationFee] = useState(0);
   const [doctorNotes, setDoctorNotes] = useState('');
   const [attachedImage, setAttachedImage] = useState(null);
   const [attachedImagePreview, setAttachedImagePreview] = useState(null);
@@ -31,7 +31,7 @@ export default function DoctorDashboard() {
   const [frequentPatients, setFrequentPatients] = useState([]);
 
   // Fetch Inventory and Frequent patients on load
-  const host = window.location.hostname || 'localhost';
+  const host = window.location.hostname || '127.0.0.1';
 
   useEffect(() => {
     fetchInventory();
@@ -88,11 +88,11 @@ export default function DoctorDashboard() {
       // Load/Pre-fill prescription from their latest visit
       if (data.latestPrescription) {
         setPrescriptionMeds(data.latestPrescription.medicines || []);
-        setConsultationFee(data.latestPrescription.consultation_fee || 400);
+        setConsultationFee(data.latestPrescription.consultation_fee || 0);
       } else {
         // Reset workspace for new patients
         setPrescriptionMeds([]);
-        setConsultationFee(400);
+        setConsultationFee(0);
       }
       setDoctorNotes('');
       setAttachedImage(null);
@@ -199,10 +199,7 @@ export default function DoctorDashboard() {
 
   // Consultation Fee Counter adjustments
   const adjustFee = (amount) => {
-    setConsultationFee(prev => {
-      const next = prev + amount;
-      return next < 400 ? 400 : next;
-    });
+    setConsultationFee(prev => Math.max(0, prev + amount));
   };
 
   // Finalize Prescription & push over WebSocket
@@ -603,31 +600,12 @@ export default function DoctorDashboard() {
 
                 {/* Prescription sidebar summary column */}
                 <div style={{ display: 'grid', gap: '1.5rem', width: '100%' }}>
-                  {/* Consultation Fee adjustment widget */}
-                  <div className="card" style={{ marginBottom: 0 }}>
-                    <h4 style={{ marginBottom: '0.75rem' }}>Consultation Fee</h4>
-                    <div className="fee-control">
-                      <button className="btn btn-secondary" onClick={() => adjustFee(-50)} style={{ fontSize: '1.2rem', padding: '0.5rem 1rem' }}>
-                        -50
-                      </button>
-                      <div className="fee-display">
-                        ₹{consultationFee}
-                      </div>
-                      <button className="btn btn-secondary" onClick={() => adjustFee(50)} style={{ fontSize: '1.2rem', padding: '0.5rem 1rem' }}>
-                        +50
-                      </button>
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: '#667085', display: 'block', marginTop: '6px', textAlign: 'center' }}>
-                      (Minimum fee is fixed at ₹400)
-                    </span>
-                  </div>
-
                   {/* Attached photo workspace */}
                   <div className="card" style={{ marginBottom: 0 }}>
                     <h4 style={{ marginBottom: '0.75rem' }}>Attach Scans/Files</h4>
                     {attachedImagePreview && (
                       <div style={{ width: '100%', height: '140px', overflow: 'hidden', borderRadius: '8px', border: '1px solid #eaecf0', marginBottom: '0.75rem' }}>
-                        <img src={attachedImagePreview} alt="Prescription preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={attachedImagePreview} alt="Prescription preview" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center bottom' }} />
                       </div>
                     )}
                     <label className="btn btn-secondary" style={{ width: '100%', cursor: 'pointer' }}>
@@ -645,6 +623,22 @@ export default function DoctorDashboard() {
                         accept="image/*"
                       />
                     </label>
+                  </div>
+
+                  {/* Consultation Fee adjustment widget */}
+                  <div className="card" style={{ marginBottom: 0 }}>
+                    <h4 style={{ marginBottom: '0.75rem' }}>Consultation Fee</h4>
+                    <div className="fee-control">
+                      <button className="btn btn-secondary" onClick={() => adjustFee(-50)} style={{ fontSize: '0.8rem', padding: '0.25rem 0.55rem' }}>
+                        -50
+                      </button>
+                      <div className="fee-display" style={{ fontSize: '0.95rem', padding: '0.2rem 0.45rem' }}>
+                        ₹{consultationFee}
+                      </div>
+                      <button className="btn btn-secondary" onClick={() => adjustFee(50)} style={{ fontSize: '0.8rem', padding: '0.25rem 0.55rem' }}>
+                        +50
+                      </button>
+                    </div>
                   </div>
 
                   {/* Action submit button */}

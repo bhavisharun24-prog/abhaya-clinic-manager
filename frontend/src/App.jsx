@@ -1,7 +1,7 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext } from 'react';
 import Header from './components/Header';
-import DoctorDashboard from './components/DoctorDashboard';
-import PharmacistDashboard from './components/PharmacistDashboard';
+import DoctorDashboard from './components/DoctorDashboardV2';
+import PharmacistDashboard from './components/PharmacistDashboardV2';
 import SplashScreen from './components/SplashScreen';
 import doctorLogo from '../../newlogo.jpeg';
 
@@ -24,7 +24,7 @@ export default function App() {
   }, []);
 
   const [activeTab, setActiveTab] = useState(() => {
-    return user?.role === 'doctor' ? 'patients' : 'calendar';
+    return user?.role === 'doctor' ? 'patients' : 'inventory';
   });
 
   const [wsMessage, setWsMessage] = useState(null);
@@ -36,7 +36,7 @@ export default function App() {
   const handleRoleChange = (role) => {
     setLoginForm({
       role,
-      username: role === 'doctor' ? 'doctor' : 'pharmacist',
+      username: role === 'doctor' ? 'doctor' : role === 'pharmacist' ? 'pharmacist' : 'Rajeshwari',
       password: ''
     });
   };
@@ -58,7 +58,7 @@ export default function App() {
       }
       setUser(data.user);
       localStorage.setItem('abhaya_user', JSON.stringify(data.user));
-      setActiveTab(data.user.role === 'doctor' ? 'patients' : 'calendar');
+      setActiveTab(data.user.role === 'doctor' ? 'patients' : 'inventory');
     } catch (err) {
       setLoginError(err.message);
     }
@@ -178,6 +178,16 @@ export default function App() {
                   transition: 'all 0.2s'
                 }}
               >Pharmacist</button>
+              <button 
+                type="button" 
+                onClick={() => handleRoleChange('rajeshwari')}
+                style={{
+                  flex: 1, padding: '0.6rem', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600,
+                  backgroundColor: loginForm.role === 'rajeshwari' ? '#d9383a' : 'transparent',
+                  color: loginForm.role === 'rajeshwari' ? 'white' : '#94a3b8',
+                  transition: 'all 0.2s'
+                }}
+              >Rajeshwari</button>
             </div>
 
             <div style={{ marginBottom: '1.25rem' }}>

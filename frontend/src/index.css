@@ -465,6 +465,38 @@ h1, h2, h3, h4, h5, h6 {
   align-items: start;
 }
 
+.case-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.case-sheet-grid > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.case-sheet-grid strong {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.case-sheet-note {
+  margin-top: 0.45rem;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  white-space: pre-wrap;
+}
+
+.case-sheet-card,
+.case-sheet-visit-content {
+  display: grid;
+  gap: 0.85rem;
+}
+
 .medicine-table {
   width: 100%;
   border-collapse: collapse;
@@ -669,5 +701,61 @@ h1, h2, h3, h4, h5, h6 {
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .prescription-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .hospital-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .header-meta {
+    gap: 1rem;
+  }
+
+  .dr-details {
+    display: none;
+  }
+
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
+
+  .sidebar-menu {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0.5rem;
+  }
+
+  .sidebar-tab {
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    min-width: max-content;
+  }
+
+  .sidebar-tab.active {
+    border-left-color: transparent;
+    border-bottom-color: var(--secondary-color);
+  }
+
+  .main-content {
+    padding: 1rem;
+  }
+
+  .form-row,
+  .case-sheet-grid,
+  .info-grid,
+  .stats-row {
+    grid-template-columns: 1fr;
   }
 }

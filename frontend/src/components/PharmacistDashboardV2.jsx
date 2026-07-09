@@ -61,7 +61,9 @@ export default function PharmacistDashboardV2() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [eodReport, setEodReport] = useState({ transactions: [], cashTotal: 0, upiTotal: 0, grandTotal: 0 });
-  const [outPatientForm, setOutPatientForm] = useState(defaultOutPatient);
+  const [outPatientForm, setOutPatientForm] = useState({ ...defaultOutPatient, patient: null });
+  const [outPatientSearchQuery, setOutPatientSearchQuery] = useState('');
+  const [outPatientSearchResults, setOutPatientSearchResults] = useState([]);
   const [walkInMeds, setWalkInMeds] = useState([]);
   const [walkInPayment, setWalkInPayment] = useState('cash');
   const [users, setUsers] = useState([]);
@@ -72,6 +74,25 @@ export default function PharmacistDashboardV2() {
     fetchInventory();
     fetchEodReport(reportDate);
   }, []);
+
+  useEffect(() => {
+    const q = outPatientSearchQuery.trim();
+    if (!q) {
+      setOutPatientSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${apiBase}/patients/search?q=${encodeURIComponent(q)}`);
+        setOutPatientSearchResults(await res.json());
+      } catch {
+        setOutPatientSearchResults([]);
+      }
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [apiBase, outPatientSearchQuery]);
 
   useEffect(() => {
     if (!selectedRx) return;
@@ -214,14 +235,31 @@ export default function PharmacistDashboardV2() {
     setOutPatientForm({ ...outPatientForm, medicine: '', quantity: '1' });
   };
 
+  const handleSelectOutPatient = (patient) => {
+    // patient shape from /patients/search
+    setOutPatientForm((cur) => ({
+      ...cur,
+      patient,
+      name: patient.name || '',
+      mobile: patient.mobile || patient.contact || ''
+    }));
+    setOutPatientSearchQuery('');
+    setOutPatientSearchResults([]);
+  };
+
   const saveWalkInBill = async () => {
     const totalAmount = walkInMeds.reduce((sum, medicine) => sum + (Number(medicine.unit_price) * Number(medicine.quantity)), 0);
+
+    const patientId = outPatientForm.patient?.id || 'OUTPATIENT';
+    const patientName = outPatientForm.name || outPatientForm.patient?.name || 'Walk-in';
+
     const response = await fetch(`${apiBase}/bills`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        patient_name: outPatientForm.name || 'Walk-in',
-        patient_id: outPatientForm.mobile || 'OUTPATIENT',
+        prescription_id: null,
+        patient_name: patientName,
+        patient_id: patientId,
         total_amount: totalAmount,
         payment_method: walkInPayment,
         verified_by: user.username,
@@ -229,8 +267,8 @@ export default function PharmacistDashboardV2() {
         medicines: { medicines: walkInMeds },
         details: {
           patient: {
-            name: outPatientForm.name || 'Walk-in',
-            mobile: outPatientForm.mobile
+            name: patientName,
+            mobile: outPatientForm.mobile || outPatientForm.patient?.mobile || outPatientForm.patient?.contact || ''
           },
           consultation_fee: 0
         }
@@ -238,12 +276,15 @@ export default function PharmacistDashboardV2() {
     });
 
     if (!response.ok) {
-      alert('Walk-in bill failed.');
+      const err = await response.json().catch(() => ({}));
+      alert(err.detail || 'Walk-in bill failed.');
       return;
     }
 
     setWalkInMeds([]);
-    setOutPatientForm(defaultOutPatient);
+    setOutPatientForm({ ...defaultOutPatient, patient: null });
+    setOutPatientSearchQuery('');
+    setOutPatientSearchResults([]);
     await fetchInventory();
     await fetchEodReport(reportDate);
   };
@@ -278,68 +319,108 @@ export default function PharmacistDashboardV2() {
     await fetchUsers();
   };
 
+  const formatDateDDMMYYYY = (value) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  };
+
   const renderCaseSheet = (rx) => {
     if (!rx) return null;
     const payload = normalizePayload(rx);
+
+    // dd-mm-yyyy everywhere for this view
+    const rxDate = formatDateDDMMYYYY(payload.prescriptionDate);
+
     return (
-      <div className="case-sheet-card">
-        <div className="case-sheet-grid">
-          <div><strong>Name</strong><span>{rx.patient_name || '-'}</span></div>
-          <div><strong>Date</strong><span>{payload.prescriptionDate || '-'}</span></div>
-          <div><strong>Regn. No.</strong><span>{rx.patient_regn_no || rx.patient_id || '-'}</span></div>
-          <div><strong>Age / Sex</strong><span>{rx.patient_age} / {rx.patient_gender}</span></div>
-          <div><strong>Address</strong><span>{rx.patient_address || '-'}</span></div>
-          <div><strong>Mobile No.</strong><span>{rx.patient_mobile || '-'}</span></div>
-          <div><strong>Weight</strong><span>{rx.patient_weight || '-'}</span></div>
-        </div>
-        <div style={{ marginTop: '1rem' }}>
-          <strong>Chief Complaints</strong>
-          <div className="case-sheet-note">{payload.chiefComplaints.join(', ') || 'No complaints recorded.'}</div>
-        </div>
-        <div className="case-sheet-grid" style={{ marginTop: '1rem' }}>
-          {Object.entries(payload.vitals).map(([key, value]) => (
-            <div key={key}><strong>{key.toUpperCase()}</strong><span>{value || '-'}</span></div>
-          ))}
-          <div><strong>Pulse</strong><span>{payload.clinicalFindings.pulse || '-'}</span></div>
-          <div><strong>B.P.</strong><span>{payload.clinicalFindings.bp || '-'}</span></div>
-        </div>
-        <div style={{ marginTop: '1rem' }}>
-          <strong>Diagnosis</strong>
-          <div className="case-sheet-note">{payload.diagnosis || 'No diagnosis recorded.'}</div>
-        </div>
-        <table className="medicine-table">
-          <thead>
-            <tr>
-              <th>Sl. No.</th>
-              <th>Name of the Medicine</th>
-              <th>Strength</th>
-              <th>M</th>
-              <th>A</th>
-              <th>E</th>
-              <th>N</th>
-              <th>SOS</th>
-              <th>Duration</th>
-              <th>Remarks</th>
-              <th>Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payload.medicines.map((medicine, index) => {
-              const quantity = Number(medicine.quantity || medicine.duration || 1);
-              return (
-                <tr key={`${medicine.name}-${index}`}>
-                  <td>{index + 1}</td>
-                  <td>{medicine.name || '-'}</td>
-                  <td>{medicine.strength || '-'}</td>
-                  {frequencyKeys.map((key) => <td key={key}>{medicine.frequency?.[key] ? 'Yes' : '-'}</td>)}
-                  <td>{medicine.duration || '-'}</td>
-                  <td>{medicine.remarks || '-'}</td>
-                  <td>Rs. {(medicineUnitPrice(medicine.name) * quantity).toFixed(2)}</td>
+      <div className="prescription-print-sheet">
+        <div className="case-sheet-card" style={{ padding: '1.25rem 1.5rem', border: '1px solid var(--border-color)', borderRadius: 12 }}>
+          {/* Header (matches screenshot style conceptually) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary-color)' }}>Prescription Paper</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 2 }}>Verification & Billing</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}><strong>Date</strong></div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--primary-color)' }}>{rxDate || '-'}</div>
+            </div>
+          </div>
+
+          {/* Body (no Chief Complaints / Diagnosis) */}
+          <div className="case-sheet-grid">
+            <div><strong>Name</strong><span>{rx.patient_name || '-'}</span></div>
+            <div><strong>Regn. No.</strong><span>{rx.patient_regn_no || rx.patient_id || '-'}</span></div>
+            <div><strong>Age / Sex</strong><span>{rx.patient_age} / {rx.patient_gender}</span></div>
+            <div><strong>Mobile No.</strong><span>{rx.patient_mobile || '-'}</span></div>
+            <div><strong>Address</strong><span>{rx.patient_address || '-'}</span></div>
+            <div><strong>Weight</strong><span>{rx.patient_weight || '-'}</span></div>
+          </div>
+
+          <div className="case-sheet-grid" style={{ marginTop: '1rem' }}>
+            {Object.entries(payload.vitals).map(([key, value]) => (
+              <div key={key}><strong>{key.toUpperCase()}</strong><span>{value || '-'}</span></div>
+            ))}
+            <div><strong>PULSE</strong><span>{payload.clinicalFindings.pulse || '-'}</span></div>
+            <div><strong>B.P.</strong><span>{payload.clinicalFindings.bp || '-'}</span></div>
+          </div>
+
+          {/* Prescription table */}
+          <table className="medicine-table">
+            <thead>
+              <tr>
+                <th>Sl. No.</th>
+                <th>Name of the Medicine</th>
+                <th>Strength</th>
+                <th>M</th>
+                <th>A</th>
+                <th>E</th>
+                <th>N</th>
+                <th>SOS</th>
+                <th>Duration</th>
+                <th>Remarks</th>
+                <th>Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payload.medicines.map((medicine, index) => {
+                const quantity = Number(medicine.quantity || medicine.duration || 1);
+                return (
+                  <tr key={`${medicine.name}-${index}`}>
+                    <td>{index + 1}</td>
+                    <td>{medicine.name || '-'}</td>
+                    <td>{medicine.strength || '-'}</td>
+                    {frequencyKeys.map((key) => <td key={key}>{medicine.frequency?.[key] ? 'Yes' : '-'}</td>)}
+                    <td>{medicine.duration || '-'}</td>
+                    <td>{medicine.remarks || '-'}</td>
+                    <td>Rs. {(medicineUnitPrice(medicine.name) * quantity).toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+
+              {/* 10 medicine gap at bottom (blank rows) */}
+              {Array.from({ length: 10 }).map((_, idx) => (
+                <tr key={`blank-${idx}`}>
+                  <td>{payload.medicines.length + idx + 1}</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  {frequencyKeys.map((key) => (
+                    <td key={`${idx}-${key}`}>&nbsp;</td>
+                  ))}
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Removed patient signature area */}
+        </div>
       </div>
     );
   };
@@ -484,7 +565,48 @@ export default function PharmacistDashboardV2() {
         {activeTab === 'outpatient' && (
           <div className="card">
             <h2>Out Patient</h2>
-            <p style={{ color: '#667085', fontSize: '0.9rem', marginBottom: '1rem' }}>Medicine-only sale for walk-ins or existing patients without a doctor visit.</p>
+            <p style={{ color: '#667085', fontSize: '0.9rem', marginBottom: '1rem' }}>Select an existing patient (optional) and add medicines for billing.</p>
+
+            <div className="form-row">
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Patient (Type & Select)</label>
+                <div className="search-input-wrapper" style={{ marginTop: 6 }}>
+                  <span className="search-icon">Search</span>
+                  <input
+                    type="text"
+                    className="search-field"
+                    placeholder="Type patient name / mobile / reg no"
+                    value={outPatientSearchQuery}
+                    onChange={(e) => setOutPatientSearchQuery(e.target.value)}
+                  />
+                </div>
+                {outPatientSearchResults.length > 0 && (
+                  <div className="autocomplete-popup">
+                    {outPatientSearchResults.map((patient) => (
+                      <div
+                        key={patient.id}
+                        className="autocomplete-item"
+                        onClick={() => handleSelectOutPatient(patient)}
+                      >
+                        <div>
+                          <div>
+                            <span className="autocomplete-name">{patient.name}</span>
+                            <span style={{ marginLeft: '0.5rem', color: '#667085', fontSize: '0.82rem' }}>
+                              {patient.age}y / {patient.gender}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.82rem', color: '#667085' }}>
+                            {patient.mobile || patient.contact || '-'} | Reg: {patient.regn_no || patient.id}
+                          </div>
+                        </div>
+                        <span className="autocomplete-id">{patient.regn_no || patient.id}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label>Name</label>
@@ -495,6 +617,7 @@ export default function PharmacistDashboardV2() {
                 <input className="form-input" value={outPatientForm.mobile} onChange={(event) => setOutPatientForm({ ...outPatientForm, mobile: event.target.value })} />
               </div>
             </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label>Medicine</label>
@@ -509,6 +632,7 @@ export default function PharmacistDashboardV2() {
               </div>
             </div>
             <button className="btn btn-secondary" onClick={addWalkInMedicine}>Add Medicine</button>
+
             <table className="medicine-table">
               <thead>
                 <tr>
@@ -527,6 +651,7 @@ export default function PharmacistDashboardV2() {
                 ))}
               </tbody>
             </table>
+
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
               <button className={`btn ${walkInPayment === 'cash' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setWalkInPayment('cash')}>Cash</button>
               <button className={`btn ${walkInPayment === 'upi' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setWalkInPayment('upi')}>UPI</button>

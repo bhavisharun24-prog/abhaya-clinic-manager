@@ -119,19 +119,31 @@ export default function DoctorDashboardV2() {
   }, [apiBase]);
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    const query = searchQuery.trim();
+    if (!query) {
       setSearchResults([]);
       return undefined;
     }
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`${apiBase}/patients/search?q=${encodeURIComponent(searchQuery)}`);
-        setSearchResults(await response.json());
+        const response = await fetch(`${apiBase}/patients/search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error(`Patient search failed (${response.status})`);
+        const results = await response.json();
+        setSearchResults(Array.isArray(results) ? results : []);
       } catch (error) {
-        console.error(error);
+        if (error.name !== 'AbortError') {
+          console.error('Patient search failed:', error);
+          setSearchResults([]);
+        }
       }
     }, 180);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [apiBase, searchQuery]);
 
   const refreshFrequentPatients = async () => {
@@ -404,7 +416,7 @@ export default function DoctorDashboardV2() {
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
             </div>
-            {searchResults.length > 0 && (
+            {searchQuery.trim() && searchResults.length > 0 && (
               <div className="autocomplete-popup">
                 {searchResults.map((patient) => (
                   <div key={patient.id} className="autocomplete-item" onClick={() => handleSelectPatient(patient.id)}>
@@ -418,6 +430,9 @@ export default function DoctorDashboardV2() {
                   </div>
                 ))}
               </div>
+            )}
+            {searchQuery.trim() && searchResults.length === 0 && (
+              <div className="autocomplete-popup search-empty-state">No matching patients found.</div>
             )}
           </div>
           <button className="btn btn-primary" onClick={() => setShowRegisterModal(true)}>New Patient</button>

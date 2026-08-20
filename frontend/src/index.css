@@ -282,6 +282,12 @@ h1, h2, h3, h4, h5, h6 {
   overflow-y: auto;
 }
 
+.search-empty-state {
+  padding: 0.9rem 1.2rem;
+  color: var(--text-muted);
+  cursor: default;
+}
+
 .autocomplete-item {
   display: flex;
   align-items: center;

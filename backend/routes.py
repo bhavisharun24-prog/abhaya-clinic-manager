@@ -218,6 +218,7 @@ def change_username(user_id: int, payload: dict):
 # 2. Patient Search with Autocomplete
 @router.get("/patients/search")
 def search_patients(q: str = ""):
+    q = q.strip()
     if not q:
         return []
     conn = get_db_connection()

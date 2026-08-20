@@ -88,16 +88,27 @@ export default function PharmacistDashboardV2() {
       return;
     }
 
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`${apiBase}/patients/search?q=${encodeURIComponent(q)}`);
-        setOutPatientSearchResults(await res.json());
-      } catch {
-        setOutPatientSearchResults([]);
+        const res = await fetch(`${apiBase}/patients/search?q=${encodeURIComponent(q)}`, {
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error(`Patient search failed (${res.status})`);
+        const results = await res.json();
+        setOutPatientSearchResults(Array.isArray(results) ? results : []);
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('Out-patient search failed:', error);
+          setOutPatientSearchResults([]);
+        }
       }
     }, 180);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [apiBase, outPatientSearchQuery]);
 
   useEffect(() => {
@@ -582,40 +593,45 @@ export default function PharmacistDashboardV2() {
             <div className="form-row">
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Patient (Type & Select)</label>
-                <div className="search-input-wrapper" style={{ marginTop: 6 }}>
-                  <span className="search-icon">Search</span>
-                  <input
-                    type="text"
-                    className="search-field"
-                    placeholder="Type patient name / mobile / reg no"
-                    value={outPatientSearchQuery}
-                    onChange={(e) => setOutPatientSearchQuery(e.target.value)}
-                  />
-                </div>
-                {outPatientSearchResults.length > 0 && (
-                  <div className="autocomplete-popup">
-                    {outPatientSearchResults.map((patient) => (
-                      <div
-                        key={patient.id}
-                        className="autocomplete-item"
-                        onClick={() => handleSelectOutPatient(patient)}
-                      >
-                        <div>
-                          <div>
-                            <span className="autocomplete-name">{patient.name}</span>
-                            <span style={{ marginLeft: '0.5rem', color: '#667085', fontSize: '0.82rem' }}>
-                              {patient.age}y / {patient.gender}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: '0.82rem', color: '#667085' }}>
-                            {patient.mobile || patient.contact || '-'} | Reg: {patient.regn_no || patient.id}
-                          </div>
-                        </div>
-                        <span className="autocomplete-id">{patient.regn_no || patient.id}</span>
-                      </div>
-                    ))}
+                <div className="search-container" style={{ marginBottom: 0 }}>
+                  <div className="search-input-wrapper" style={{ marginTop: 6 }}>
+                    <span className="search-icon">Search</span>
+                    <input
+                      type="text"
+                      className="search-field"
+                      placeholder="Type patient name / mobile / reg no"
+                      value={outPatientSearchQuery}
+                      onChange={(e) => setOutPatientSearchQuery(e.target.value)}
+                    />
                   </div>
-                )}
+                  {outPatientSearchQuery.trim() && outPatientSearchResults.length > 0 && (
+                    <div className="autocomplete-popup">
+                      {outPatientSearchResults.map((patient) => (
+                        <div
+                          key={patient.id}
+                          className="autocomplete-item"
+                          onClick={() => handleSelectOutPatient(patient)}
+                        >
+                          <div>
+                            <div>
+                              <span className="autocomplete-name">{patient.name}</span>
+                              <span style={{ marginLeft: '0.5rem', color: '#667085', fontSize: '0.82rem' }}>
+                                {patient.age}y / {patient.gender}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: '#667085' }}>
+                              {patient.mobile || patient.contact || '-'} | Reg: {patient.regn_no || patient.id}
+                            </div>
+                          </div>
+                          <span className="autocomplete-id">{patient.regn_no || patient.id}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {outPatientSearchQuery.trim() && outPatientSearchResults.length === 0 && (
+                    <div className="autocomplete-popup search-empty-state">No matching patients found.</div>
+                  )}
+                </div>
               </div>
             </div>
 

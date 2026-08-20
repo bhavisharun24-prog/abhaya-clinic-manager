@@ -5,6 +5,7 @@ import os
 import shutil
 import uuid
 from datetime import datetime, date
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from backend.db import get_db_connection, get_next_patient_id, verify_password, hash_password
 from backend.models.password_reset import create_reset_token, verify_reset_token
 from backend.websocket import manager
@@ -53,6 +54,57 @@ def _normalize_prescription_payload(payload):
         "consultation_fee": int(data.get("consultation_fee", 400) or 400),
         "prescription_date": data.get("prescription_date", datetime.now().strftime("%Y-%m-%d")),
     }
+
+
+def _money(value) -> Decimal:
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Amount must be a valid number")
+    if not amount.is_finite() or amount < 0:
+        raise HTTPException(status_code=400, detail="Amount must be a non-negative number")
+    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _medicine_quantity(medicine) -> int:
+    try:
+        quantity = int(medicine.get("quantity") or medicine.get("duration") or 1)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Invalid quantity for {medicine.get('name', 'medicine')}")
+    if quantity < 1:
+        raise HTTPException(status_code=400, detail="Medicine quantity must be at least 1")
+    return quantity
+
+
+def _validated_medicines(cursor, medicines):
+    if not isinstance(medicines, list):
+        raise HTTPException(status_code=400, detail="Medicines must be a list")
+    if not medicines:
+        raise HTTPException(status_code=400, detail="At least one medicine is required")
+    validated = []
+    rows_by_id = {}
+    quantities_by_id = {}
+    total = Decimal("0.00")
+    for medicine in medicines:
+        name = str(medicine.get("name", "")).strip() if isinstance(medicine, dict) else ""
+        if not name:
+            raise HTTPException(status_code=400, detail="Every medicine must have a name")
+        quantity = _medicine_quantity(medicine)
+        row = cursor.execute(
+            "SELECT id, name, stock_quantity, unit_price FROM medicines WHERE lower(name) = lower(?)",
+            (name,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=400, detail=f"Medicine not found: {name}")
+        rows_by_id[row["id"]] = row
+        quantities_by_id[row["id"]] = quantities_by_id.get(row["id"], 0) + quantity
+        unit_price = _money(row["unit_price"])
+        total += unit_price * quantity
+        validated.append((row, quantity, unit_price))
+    for row_id, row in rows_by_id.items():
+        if row["stock_quantity"] < quantities_by_id[row_id]:
+            raise HTTPException(status_code=400, detail=f"Insufficient stock for {row['name']}")
+    return validated, total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _enrich_prescription_row(row):
@@ -489,7 +541,6 @@ async def generate_bill(payload: dict):
     prescription_id = payload.get("prescription_id")
     patient_name = payload.get("patient_name")
     patient_id = payload.get("patient_id")
-    total_amount = payload.get("total_amount")
     payment_method = payload.get("payment_method")
     verified_by = payload.get("verified_by")
     source_type = payload.get("source_type", "prescription")
@@ -497,60 +548,77 @@ async def generate_bill(payload: dict):
     details = payload.get("details", {})
     today = datetime.now().strftime("%Y-%m-%d")
 
+    if payment_method not in {"cash", "upi"}:
+        raise HTTPException(status_code=400, detail="Payment method must be cash or upi")
+    if not verified_by:
+        raise HTTPException(status_code=400, detail="verified_by is required")
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         bill_details = {}
+        medicine_total = Decimal("0.00")
+        consultation_fee = Decimal("0.00")
 
         if prescription_id:
-            cursor.execute("UPDATE prescriptions SET status = 'billed' WHERE id = ?", (prescription_id,))
             cursor.execute("""
-                SELECT p.medicines, p.consultation_fee, pat.name, pat.age, pat.gender, pat.address, pat.mobile, pat.weight, pat.regn_no
+                SELECT p.id, p.status, p.medicines, p.consultation_fee, p.patient_id,
+                       pat.name, pat.age, pat.gender, pat.address, pat.mobile, pat.weight, pat.regn_no
                 FROM prescriptions p
                 JOIN patients pat ON p.patient_id = pat.id
                 WHERE p.id = ?
             """, (prescription_id,))
             rx_row = cursor.fetchone()
-            if rx_row:
-                normalized = _normalize_prescription_payload(rx_row["medicines"])
-                meds_list = normalized.get("medicines", [])
-                bill_details = {
-                    **normalized,
-                    "patient": {
-                        "name": rx_row["name"],
-                        "age": rx_row["age"],
-                        "gender": rx_row["gender"],
-                        "address": rx_row["address"],
-                        "mobile": rx_row["mobile"],
-                        "weight": rx_row["weight"],
-                        "regn_no": rx_row["regn_no"],
-                    }
+            if not rx_row:
+                raise HTTPException(status_code=404, detail="Prescription not found")
+            if rx_row["status"] == "billed" or cursor.execute(
+                "SELECT 1 FROM bills WHERE prescription_id = ? LIMIT 1", (prescription_id,)
+            ).fetchone():
+                raise HTTPException(status_code=409, detail="Prescription has already been billed")
+            if rx_row["status"] not in {"verified", "sent"}:
+                raise HTTPException(status_code=400, detail="Prescription is not ready for billing")
+
+            normalized = _normalize_prescription_payload(rx_row["medicines"])
+            meds_list = normalized.get("medicines", [])
+            validated, medicine_total = _validated_medicines(cursor, meds_list)
+            requested_fee = details.get("consultation_fee", normalized.get("consultation_fee", 400)) if isinstance(details, dict) else normalized.get("consultation_fee", 400)
+            consultation_fee = _money(requested_fee)
+            if consultation_fee < Decimal("400.00"):
+                raise HTTPException(status_code=400, detail="Consultation fee cannot be less than Rs. 400")
+            bill_details = {
+                **normalized,
+                "consultation_fee": float(consultation_fee),
+                "medicine_total": float(medicine_total),
+                "patient": {
+                    "name": rx_row["name"], "age": rx_row["age"], "gender": rx_row["gender"],
+                    "address": rx_row["address"], "mobile": rx_row["mobile"],
+                    "weight": rx_row["weight"], "regn_no": rx_row["regn_no"],
                 }
-                for med in meds_list:
-                    qty = int(med.get("quantity") or med.get("duration") or 1)
-                    cursor.execute(
-                        "UPDATE medicines SET stock_quantity = MAX(0, stock_quantity - ?) WHERE name = ?",
-                        (qty, med["name"])
-                    )
+            }
         elif medicines_payload:
             normalized = _normalize_prescription_payload(medicines_payload)
             meds_list = normalized.get("medicines", [])
+            validated, medicine_total = _validated_medicines(cursor, meds_list)
             bill_details = {
                 **normalized,
                 **(_safe_json_loads(details, {}) if not isinstance(details, dict) else details)
             }
-            for med in meds_list:
-                qty = int(med.get("quantity") or med.get("duration") or 1)
-                cursor.execute(
-                    "UPDATE medicines SET stock_quantity = MAX(0, stock_quantity - ?) WHERE name = ?",
-                    (qty, med["name"])
-                )
+            bill_details["medicine_total"] = float(medicine_total)
+            consultation_fee = Decimal("0.00")
+        else:
+            raise HTTPException(status_code=400, detail="A prescription or medicines list is required")
+
+        total = (medicine_total + consultation_fee).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        for row, quantity, _ in validated:
+            cursor.execute("UPDATE medicines SET stock_quantity = stock_quantity - ? WHERE id = ?", (quantity, row["id"]))
 
         cursor.execute(
             """INSERT INTO bills (prescription_id, patient_name, patient_id, total_amount, payment_method, date, verified_by, source_type, details)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (prescription_id, patient_name, patient_id, total_amount, payment_method, today, verified_by, source_type, json.dumps(bill_details))
+            (prescription_id, patient_name, patient_id, float(total), payment_method, today, verified_by, source_type, json.dumps(bill_details))
         )
+        if prescription_id:
+            cursor.execute("UPDATE prescriptions SET status = 'billed' WHERE id = ?", (prescription_id,))
 
         conn.commit()
         conn.close()
@@ -558,6 +626,10 @@ async def generate_bill(payload: dict):
         if prescription_id:
             await manager.broadcast("PRESCRIPTION_UPDATED", {"id": prescription_id, "status": "billed"})
         return {"message": "Billing completed successfully"}
+    except HTTPException:
+        conn.rollback()
+        conn.close()
+        raise
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
@@ -748,10 +820,11 @@ def get_eod_report(date: str = None):
         bill["details"] = details
         bill["medicines"] = details.get("medicines", [])
         transactions.append(bill)
+        amount = float(bill.get("total_amount") or 0)
         if bill["payment_method"] == "cash":
-            cash_total += bill["total_amount"]
+            cash_total += amount
         elif bill["payment_method"] == "upi":
-            upi_total += bill["total_amount"]
+            upi_total += amount
 
     return {
         "date": date,

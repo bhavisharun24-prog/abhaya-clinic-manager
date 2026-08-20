@@ -43,6 +43,12 @@ const getDaysToExpiry = (expiryDate) => {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 };
 
+const getLocalDate = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+};
+
 export default function PharmacistDashboardV2() {
   const { activeTab, setActiveTab, wsMessage, clearWsMessage, user } = useContext(AppContext);
   const host = window.location.hostname || '127.0.0.1';
@@ -59,7 +65,7 @@ export default function PharmacistDashboardV2() {
   const [invForm, setInvForm] = useState(defaultInventoryForm);
   const [consultationFee, setConsultationFee] = useState(minimumConsultationFee);
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reportDate, setReportDate] = useState(getLocalDate);
   const [eodReport, setEodReport] = useState({ transactions: [], cashTotal: 0, upiTotal: 0, grandTotal: 0 });
   const [outPatientForm, setOutPatientForm] = useState({ ...defaultOutPatient, patient: null });
   const [outPatientSearchQuery, setOutPatientSearchQuery] = useState('');
@@ -168,24 +174,30 @@ export default function PharmacistDashboardV2() {
     const medicineTotal = calculateMedicineTotal(payload.medicines);
     const totalAmount = medicineTotal + consultationFee;
 
-    const response = await fetch(`${apiBase}/bills`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prescription_id: selectedRx.id,
-        patient_name: selectedRx.patient_name,
-        patient_id: selectedRx.patient_id,
-        total_amount: totalAmount,
-        payment_method: paymentMethod,
-        verified_by: user.username,
-        details: {
-          consultation_fee: consultationFee
-        }
-      })
-    });
+    try {
+      const response = await fetch(`${apiBase}/bills`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prescription_id: selectedRx.id,
+          patient_name: selectedRx.patient_name,
+          patient_id: selectedRx.patient_id,
+          total_amount: totalAmount,
+          payment_method: paymentMethod,
+          verified_by: user.username,
+          details: {
+            consultation_fee: consultationFee
+          }
+        })
+      });
 
-    if (!response.ok) {
-      alert('Billing transaction failed.');
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(error.detail || 'Billing transaction failed.');
+        return;
+      }
+    } catch {
+      alert('Unable to reach the billing server.');
       return;
     }
 
@@ -250,7 +262,7 @@ export default function PharmacistDashboardV2() {
   const saveWalkInBill = async () => {
     const totalAmount = walkInMeds.reduce((sum, medicine) => sum + (Number(medicine.unit_price) * Number(medicine.quantity)), 0);
 
-    const patientId = outPatientForm.patient?.id || 'OUTPATIENT';
+    const patientId = outPatientForm.patient?.id ?? null;
     const patientName = outPatientForm.name || outPatientForm.patient?.name || 'Walk-in';
 
     const response = await fetch(`${apiBase}/bills`, {

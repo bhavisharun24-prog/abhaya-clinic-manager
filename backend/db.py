@@ -66,6 +66,46 @@ def _migrate_users_table(conn):
     conn.execute("ALTER TABLE users_new RENAME TO users")
 
 
+def _migrate_bills_table(conn):
+    columns = {row[1]: row for row in conn.execute("PRAGMA table_info(bills)")}
+    required = {"patient_name", "patient_id", "source_type", "details"}
+    create_sql_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bills'"
+    ).fetchone()
+    create_sql = (create_sql_row[0] if create_sql_row else "").upper()
+    needs_rebuild = not required.issubset(columns) or "PRESCRIPTION_ID INTEGER NOT NULL" in create_sql
+    if not needs_rebuild:
+        return
+
+    conn.execute("""
+        CREATE TABLE bills_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          prescription_id INTEGER,
+          patient_name TEXT,
+          patient_id TEXT,
+          total_amount REAL NOT NULL,
+          payment_method TEXT CHECK(payment_method IN ('upi', 'cash')) NOT NULL,
+          date TEXT NOT NULL,
+          verified_by TEXT NOT NULL,
+          source_type TEXT DEFAULT 'prescription',
+          details TEXT DEFAULT '{}',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
+        )
+    """)
+    conn.execute("""
+        INSERT INTO bills_new
+          (id, prescription_id, patient_name, patient_id, total_amount,
+           payment_method, date, verified_by, source_type, details, created_at)
+        SELECT id, prescription_id,
+               NULL, NULL, total_amount, payment_method, date, verified_by,
+               'prescription', COALESCE(details, '{}'), created_at
+        FROM bills
+    """)
+    conn.execute("DROP TABLE bills")
+    conn.execute("ALTER TABLE bills_new RENAME TO bills")
+
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -157,6 +197,7 @@ def init_db():
       FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
     );
     """)
+    _migrate_bills_table(conn)
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS appointments (
@@ -182,7 +223,6 @@ def init_db():
     _ensure_column(conn, "patients", "weight", "TEXT")
     _ensure_column(conn, "patients", "regn_no", "TEXT")
     _ensure_column(conn, "patients", "documents", "TEXT DEFAULT '[]'")
-    _ensure_column(conn, "bills", "details", "TEXT DEFAULT '{}'")
 
     _ensure_user(cursor, "doctor", "doctor123", "doctor")
     _ensure_user(cursor, "pharmacist", "pharmacist123", "pharmacist")

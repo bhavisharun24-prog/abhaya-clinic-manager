@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { AppContext } from '../App';
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '../utils/date';
 
 const defaultInventoryForm = {
   id: null,
@@ -22,7 +23,13 @@ const defaultOutPatient = {
 
 const consultationStep = 50;
 const minimumConsultationFee = 400;
-const frequencyKeys = ['m', 'a', 'e', 'n', 'sos'];
+const scheduleKeys = ['m', 'a', 'e', 'n'];
+const clinicalFindingLabel = (key, value) => {
+  if (!value) return '';
+  if (key === 'pulse') return `${value} /per min`;
+  if (key === 'bp') return `${value} mmHG`;
+  return String(value);
+};
 
 const normalizePayload = (rx) => {
   const payload = rx?.payload || rx || {};
@@ -342,16 +349,6 @@ export default function PharmacistDashboardV2() {
     await fetchUsers();
   };
 
-  const formatDateDDMMYYYY = (value) => {
-    if (!value) return '';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return String(value);
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `${dd}-${mm}-${yyyy}`;
-  };
-
   const renderCaseSheet = (rx) => {
     if (!rx) return null;
     const payload = normalizePayload(rx);
@@ -388,8 +385,8 @@ export default function PharmacistDashboardV2() {
             {Object.entries(payload.vitals).map(([key, value]) => (
               <div key={key}><strong>{key.toUpperCase()}</strong><span>{value || '-'}</span></div>
             ))}
-            <div><strong>PULSE</strong><span>{payload.clinicalFindings.pulse || '-'}</span></div>
-            <div><strong>B.P.</strong><span>{payload.clinicalFindings.bp || '-'}</span></div>
+            <div><strong>PULSE</strong><span>{clinicalFindingLabel('pulse', payload.clinicalFindings.pulse) || '-'}</span></div>
+            <div><strong>B.P.</strong><span>{clinicalFindingLabel('bp', payload.clinicalFindings.bp) || '-'}</span></div>
           </div>
 
           {/* Prescription table */}
@@ -399,11 +396,7 @@ export default function PharmacistDashboardV2() {
                 <th>Sl. No.</th>
                 <th>Name of the Medicine</th>
                 <th>Strength</th>
-                <th>M</th>
-                <th>A</th>
-                <th>E</th>
-                <th>N</th>
-                <th>SOS</th>
+                <th>Schedule<div className="medicine-schedule-label">M-A-E-N</div></th>
                 <th>Duration</th>
                 <th>Remarks</th>
                 <th>Price</th>
@@ -417,7 +410,10 @@ export default function PharmacistDashboardV2() {
                     <td>{index + 1}</td>
                     <td>{medicine.name || '-'}</td>
                     <td>{medicine.strength || '-'}</td>
-                    {frequencyKeys.map((key) => <td key={key}>{medicine.frequency?.[key] ? 'Yes' : '-'}</td>)}
+                    <td>
+                      <div>{scheduleKeys.map((key) => (medicine.frequency?.[key] ? '1' : '0')).join('-')}</div>
+                      {medicine.frequency?.sos && <div className="medicine-schedule-sos">SOS</div>}
+                    </td>
                     <td>{medicine.duration || '-'}</td>
                     <td>{medicine.remarks || '-'}</td>
                     <td>Rs. {(medicineUnitPrice(medicine.name) * quantity).toFixed(2)}</td>
@@ -431,9 +427,7 @@ export default function PharmacistDashboardV2() {
                   <td>{payload.medicines.length + idx + 1}</td>
                   <td>&nbsp;</td>
                   <td>&nbsp;</td>
-                  {frequencyKeys.map((key) => (
-                    <td key={`${idx}-${key}`}>&nbsp;</td>
-                  ))}
+                  <td>&nbsp;</td>
                   <td>&nbsp;</td>
                   <td>&nbsp;</td>
                   <td>&nbsp;</td>
@@ -510,7 +504,7 @@ export default function PharmacistDashboardV2() {
                       <td>{item.manufacturer || '-'}</td>
                       <td>{item.dosage || '-'}</td>
                       <td style={{ color: Number(item.stock_quantity) < 50 ? '#b42318' : 'inherit', fontWeight: 600 }}>{item.stock_quantity}{Number(item.stock_quantity) < 50 ? ' low' : ''}</td>
-                      <td style={{ color: expiringSoon ? '#b42318' : 'inherit' }}>{item.expiry_date || '-'}{expiringSoon ? ` (${daysToExpiry}d)` : ''}</td>
+                      <td style={{ color: expiringSoon ? '#b42318' : 'inherit' }}>{formatDateDDMMYYYY(item.expiry_date) || '-'}{expiringSoon ? ` (${daysToExpiry}d)` : ''}</td>
                       <td>
                         {canEditInventory ? (
                           <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
@@ -715,7 +709,7 @@ export default function PharmacistDashboardV2() {
                         <strong>{tx.patient_name}</strong>
                         <span>Rs. {Number(tx.total_amount).toFixed(2)}</span>
                       </div>
-                      <div style={{ color: '#667085', fontSize: '0.88rem' }}>{tx.patient_id} | {tx.payment_method} | {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      <div style={{ color: '#667085', fontSize: '0.88rem' }}>{tx.patient_id} | {tx.payment_method} | {formatDateTimeDDMMYYYY(tx.created_at)}</div>
                     </button>
                   ))}
                 </div>

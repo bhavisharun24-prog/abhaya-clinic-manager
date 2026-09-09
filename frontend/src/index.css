@@ -447,10 +447,56 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 0 4px var(--focus-ring);
 }
 
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.input-with-unit .form-input {
+  flex: 1;
+}
+
+.input-with-unit > span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
+}
+
+.complaint-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border: 1.5px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fcfcfd;
+}
+
+.complaint-option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.complaint-option:hover {
+  background: #f2f4f7;
+}
+
+.complaint-option input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--secondary-color);
 }
 
 /* Card components */
@@ -501,6 +547,156 @@ h1, h2, h3, h4, h5, h6 {
 .case-sheet-visit-content {
   display: grid;
   gap: 0.85rem;
+}
+
+.visit-actions {
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.previous-visit-print-sheet {
+  display: none;
+}
+
+.previous-visit-print-paper {
+  background: white;
+  color: #101828;
+  font-family: Arial, sans-serif;
+}
+
+.previous-visit-print-header {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 2px solid #101b42;
+}
+
+.previous-visit-print-header img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.previous-visit-print-clinic h1,
+.previous-visit-print-doctor h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  color: #101b42;
+}
+
+.previous-visit-print-clinic p,
+.previous-visit-print-doctor p {
+  margin: 0.1rem 0 0;
+  color: #667085;
+  font-size: 0.72rem;
+}
+
+.previous-visit-print-doctor {
+  text-align: right;
+}
+
+.previous-visit-print-patient {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem 0.7rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #d0d5dd;
+}
+
+.previous-visit-print-patient > div,
+.previous-visit-print-clinical-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.previous-visit-print-wide {
+  grid-column: span 2;
+}
+
+.previous-visit-print-paper strong {
+  color: #667085;
+  font-size: 0.63rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.previous-visit-print-paper span {
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.previous-visit-print-section {
+  margin-top: 0.65rem;
+}
+
+.previous-visit-print-section h2 {
+  margin: 0 0 0.35rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid #d0d5dd;
+  color: #101b42;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.previous-visit-print-clinical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.8rem;
+}
+
+.previous-visit-print-vitals {
+  grid-column: 1 / -1;
+}
+
+.previous-visit-print-medicines {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.7rem;
+}
+
+.previous-visit-print-medicines th,
+.previous-visit-print-medicines td {
+  border: 1px solid #98a2b3;
+  padding: 0.3rem 0.35rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.previous-visit-print-medicines th {
+  background: #f2f4f7;
+  color: #344054;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.previous-visit-print-medicines th:nth-child(1) { width: 5%; }
+.previous-visit-print-medicines th:nth-child(2) { width: 25%; }
+.previous-visit-print-medicines th:nth-child(3) { width: 15%; }
+.previous-visit-print-medicines th:nth-child(4) { width: 15%; }
+.previous-visit-print-medicines th:nth-child(5) { width: 15%; }
+.previous-visit-print-medicines th:nth-child(6) { width: 25%; }
+
+.medicine-schedule-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.medicine-schedule-sos {
+  color: #b42318;
+  font-weight: 700;
+  font-size: 0.65rem;
 }
 
 .medicine-table {
@@ -707,6 +903,39 @@ h1, h2, h3, h4, h5, h6 {
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .previous-visit-print-sheet,
+  .previous-visit-print-sheet * {
+    visibility: visible !important;
+  }
+
+  .previous-visit-print-sheet {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .previous-visit-print-paper {
+    width: 100% !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .previous-visit-print-section,
+  .previous-visit-print-patient,
+  .previous-visit-print-medicines {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
 

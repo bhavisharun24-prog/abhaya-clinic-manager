@@ -1,5 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { AppContext } from '../App';
+import clinicLogo from '../../../newlogo.jpeg';
+import { formatDateDDMMYYYY } from '../utils/date';
 
 const complaintOptions = [
   'Fever',
@@ -24,6 +26,7 @@ const complaintOptions = [
 const defaultVitals = { spo2: '', rbs: '', fbs: '', ppbs: '', hba1c: '', ecg: '', others: '' };
 const defaultClinicalFindings = { pulse: '', bp: '' };
 const frequencyKeys = ['m', 'a', 'e', 'n', 'sos'];
+const scheduleKeys = ['m', 'a', 'e', 'n'];
 
 const createMedicineRow = () => ({
   name: '',
@@ -68,6 +71,12 @@ const normalizePrescription = (value) => {
 };
 
 const caseSheetLabel = (value) => value.toUpperCase();
+const clinicalFindingLabel = (key, value) => {
+  if (!value) return '';
+  if (key === 'pulse') return `${value} /per min`;
+  if (key === 'bp') return `${value} mmHG`;
+  return String(value);
+};
 
 export default function DoctorDashboardV2() {
   const { activeTab, setActiveTab } = useContext(AppContext);
@@ -81,6 +90,7 @@ export default function DoctorDashboardV2() {
   const [frequentPatients, setFrequentPatients] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [editingPrescriptionId, setEditingPrescriptionId] = useState(null);
+  const [printPrescription, setPrintPrescription] = useState(null);
   const [prescriptionDate, setPrescriptionDate] = useState(new Date().toISOString().slice(0, 10));
   const [chiefComplaints, setChiefComplaints] = useState([]);
   const [otherComplaint, setOtherComplaint] = useState('');
@@ -231,8 +241,12 @@ export default function DoctorDashboardV2() {
     });
   };
 
-  const handleComplaintChange = (event) => {
-    setChiefComplaints(Array.from(event.target.selectedOptions).map((option) => option.value));
+  const toggleComplaint = (complaint) => {
+    setChiefComplaints((current) => (
+      current.includes(complaint)
+        ? current.filter((item) => item !== complaint)
+        : [...current, complaint]
+    ));
   };
 
   const handleMedicineChange = (index, field, value) => {
@@ -320,6 +334,95 @@ export default function DoctorDashboardV2() {
     setActiveTab('prescriptions');
   };
 
+  const printPreviousVisit = (prescription) => {
+    setPrintPrescription(prescription);
+    window.setTimeout(() => window.print(), 0);
+  };
+
+  useEffect(() => {
+    const clearPrintPrescription = () => setPrintPrescription(null);
+    window.addEventListener('afterprint', clearPrintPrescription);
+    return () => window.removeEventListener('afterprint', clearPrintPrescription);
+  }, []);
+
+  const renderPrintablePrescription = (prescription) => {
+    const normalized = normalizePrescription(prescription);
+    const complaintList = [...normalized.chiefComplaints.filter((item) => item !== 'Others')];
+    if (normalized.otherComplaint) complaintList.push(normalized.otherComplaint);
+    const patient = selectedPatient?.patient || {};
+
+    return (
+      <div className="prescription-print-sheet previous-visit-print-sheet">
+        <div className="previous-visit-print-paper">
+          <header className="previous-visit-print-header">
+            <img src={clinicLogo} alt="Abhaya Medical Care" />
+            <div className="previous-visit-print-clinic">
+              <h1>ABHAYA MEDICAL CARE</h1>
+              <p>Compassion... Care... Cure...</p>
+            </div>
+            <div className="previous-visit-print-doctor">
+              <h2>Dr. Raveesha .A</h2>
+              <p>M.B.B.S, M.D, F.A.G.E, M.N.A.M.S.</p>
+            </div>
+          </header>
+
+          <div className="previous-visit-print-patient">
+            <div><strong>Patient Name</strong><span>{patient.name || '-'}</span></div>
+            <div><strong>Regn. No.</strong><span>{patient.regn_no || patient.id || '-'}</span></div>
+            <div><strong>Age / Sex</strong><span>{patient.age || '-'} / {patient.gender || '-'}</span></div>
+            <div><strong>Mobile No.</strong><span>{patient.mobile || patient.contact || '-'}</span></div>
+            <div><strong>Weight</strong><span>{patient.weight || '-'}</span></div>
+            <div className="previous-visit-print-wide"><strong>Address</strong><span>{patient.address || '-'}</span></div>
+          </div>
+
+          <div className="previous-visit-print-section">
+            <h2>Clinical Details</h2>
+            <div className="previous-visit-print-clinical-grid">
+              <div><strong>Chief Complaints</strong><span>{complaintList.join(', ') || '-'}</span></div>
+              <div><strong>Diagnosis</strong><span>{normalized.diagnosis || '-'}</span></div>
+              <div className="previous-visit-print-vitals"><strong>Vitals</strong><span>{Object.entries(normalized.vitals).filter(([, value]) => value).map(([key, value]) => `${caseSheetLabel(key)}: ${value}`).join(' | ') || '-'}</span></div>
+              <div><strong>Clinical Findings</strong><span>{Object.entries(normalized.clinicalFindings).filter(([, value]) => value).map(([key, value]) => `${caseSheetLabel(key)}: ${clinicalFindingLabel(key, value)}`).join(' | ') || '-'}</span></div>
+            </div>
+          </div>
+
+          <div className="previous-visit-print-section">
+            <h2>Rx</h2>
+            <table className="previous-visit-print-medicines">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Medicine</th>
+                  <th>Strength</th>
+                  <th>Schedule<div className="medicine-schedule-label">M-A-E-N</div></th>
+                  <th>Duration</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {normalized.medicines.map((row, index) => {
+                  const scheduleValues = scheduleKeys.map((key) => (row.frequency?.[key] ? '1' : '0')).join('-');
+                  return (
+                    <tr key={`${prescription.id}-print-${index}`}>
+                      <td>{index + 1}</td>
+                      <td>{row.name || '-'}</td>
+                      <td>{row.strength || '-'}</td>
+                      <td>
+                        <div>{scheduleValues}</div>
+                        {row.frequency?.sos && <div className="medicine-schedule-sos">SOS</div>}
+                      </td>
+                      <td>{row.duration || '-'}</td>
+                      <td>{row.remarks || '-'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderVisitSummary = (prescription) => {
     const normalized = normalizePrescription(prescription);
     const complaintList = [...normalized.chiefComplaints.filter((item) => item !== 'Others')];
@@ -329,7 +432,7 @@ export default function DoctorDashboardV2() {
       <div className="case-sheet-visit-content">
         <div className="case-sheet-grid">
           <div><strong>Name</strong><span>{selectedPatient?.patient.name || '-'}</span></div>
-          <div><strong>Date</strong><span>{normalized.prescriptionDate || '-'}</span></div>
+          <div><strong>Date</strong><span>{formatDateDDMMYYYY(normalized.prescriptionDate) || '-'}</span></div>
           <div><strong>Regn. No.</strong><span>{selectedPatient?.patient.regn_no || selectedPatient?.patient.id || '-'}</span></div>
           <div><strong>Age / Sex</strong><span>{selectedPatient?.patient.age} / {selectedPatient?.patient.gender}</span></div>
           <div><strong>Address</strong><span>{selectedPatient?.patient.address || '-'}</span></div>
@@ -344,8 +447,8 @@ export default function DoctorDashboardV2() {
           {Object.keys(defaultVitals).map((key) => (
             <div key={key}><strong>{caseSheetLabel(key)}</strong><span>{normalized.vitals[key] || '-'}</span></div>
           ))}
-          <div><strong>Pulse</strong><span>{normalized.clinicalFindings.pulse || '-'}</span></div>
-          <div><strong>B.P.</strong><span>{normalized.clinicalFindings.bp || '-'}</span></div>
+          <div><strong>Pulse</strong><span>{clinicalFindingLabel('pulse', normalized.clinicalFindings.pulse) || '-'}</span></div>
+          <div><strong>B.P.</strong><span>{clinicalFindingLabel('bp', normalized.clinicalFindings.bp) || '-'}</span></div>
         </div>
         <div style={{ marginTop: '1rem' }}>
           <strong>Diagnosis</strong>
@@ -423,7 +526,7 @@ export default function DoctorDashboardV2() {
                     <div>
                       <div><span className="autocomplete-name">{patient.name}</span><span style={{ marginLeft: '0.5rem', color: '#667085', fontSize: '0.82rem' }}>{patient.age}y / {patient.gender}</span></div>
                       <div style={{ fontSize: '0.82rem', color: '#667085' }}>
-                        {patient.mobile || patient.contact || '-'} | Reg: {patient.registration_date || '-'} | Visit: {patient.latest_visit_date || '-'}
+                        {patient.mobile || patient.contact || '-'} | Reg: {formatDateDDMMYYYY(patient.registration_date) || '-'} | Visit: {formatDateDDMMYYYY(patient.latest_visit_date) || '-'}
                       </div>
                     </div>
                     <span className="autocomplete-id">{patient.regn_no || patient.id}</span>
@@ -558,9 +661,18 @@ export default function DoctorDashboardV2() {
 
                 <div style={{ marginTop: '1.5rem' }}>
                   <h4 style={{ marginBottom: '0.75rem' }}>Chief Complaints</h4>
-                  <select multiple className="form-input" style={{ minHeight: '180px' }} value={chiefComplaints} onChange={handleComplaintChange}>
-                    {complaintOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  <div className="complaint-options">
+                    {complaintOptions.map((option) => (
+                      <label key={option} className="complaint-option">
+                        <input
+                          type="checkbox"
+                          checked={chiefComplaints.includes(option)}
+                          onChange={() => toggleComplaint(option)}
+                        />
+                        <span>{option}</span>
+                      </label>
+                    ))}
+                  </div>
                   {chiefComplaints.includes('Others') && (
                     <textarea
                       className="form-input"
@@ -577,8 +689,14 @@ export default function DoctorDashboardV2() {
                   <div>
                     <strong>Clinical Findings</strong>
                     <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <input className="form-input" placeholder="Pulse (/per min)" value={clinicalFindings.pulse} onChange={(event) => setClinicalFindings({ ...clinicalFindings, pulse: event.target.value })} />
-                      <input className="form-input" placeholder="B.P. (mmHG)" value={clinicalFindings.bp} onChange={(event) => setClinicalFindings({ ...clinicalFindings, bp: event.target.value })} />
+                      <div className="input-with-unit">
+                        <input className="form-input" placeholder="Pulse" value={clinicalFindings.pulse} onChange={(event) => setClinicalFindings({ ...clinicalFindings, pulse: event.target.value })} />
+                        <span>/per min</span>
+                      </div>
+                      <div className="input-with-unit">
+                        <input className="form-input" placeholder="B.P." value={clinicalFindings.bp} onChange={(event) => setClinicalFindings({ ...clinicalFindings, bp: event.target.value })} />
+                        <span>mmHG</span>
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -656,9 +774,14 @@ export default function DoctorDashboardV2() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                           <div>
                             <strong>Visit #{visit.visit_number}</strong>
-                            <div style={{ color: '#667085', fontSize: '0.9rem' }}>{visit.date}</div>
+                            <div style={{ color: '#667085', fontSize: '0.9rem' }}>{formatDateDDMMYYYY(visit.date) || '-'}</div>
                           </div>
-                          {prescription && <button className="btn btn-secondary" type="button" onClick={() => loadPreviousVisit(prescription)}>Edit This Visit</button>}
+                          {prescription && (
+                            <div className="visit-actions">
+                              <button className="btn btn-secondary" type="button" onClick={() => loadPreviousVisit(prescription)}>Edit This Visit</button>
+                              <button className="btn btn-primary" type="button" onClick={() => printPreviousVisit(prescription)}>Print Prescription</button>
+                            </div>
+                          )}
                         </div>
                         <div style={{ marginTop: '0.75rem', color: '#344054' }}>
                           <strong>Doctor Notes:</strong> {visit.doctor_notes || 'None'}
@@ -675,6 +798,8 @@ export default function DoctorDashboardV2() {
           </div>
         )}
       </main>
+
+      {printPrescription && renderPrintablePrescription(printPrescription)}
 
       {showRegisterModal && (
         <div className="modal-overlay">
